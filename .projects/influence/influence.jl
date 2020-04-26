@@ -1,5 +1,6 @@
-using .MySQLmodule
+#using .MySQLmodule
 using Plots
+using Printf
 
 
 ENV["JULIA_DEBUG"]="info"
@@ -15,10 +16,11 @@ struct Conformity
   ppe_usage
   higien
   distance
+  overlap
 end
 
 function Conformity(d::Dict)
-  return Conformity(d["ppe_usage"], d["higien"], d["distance"])
+  return Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
 end
 
 
@@ -134,16 +136,14 @@ end
 
 function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
-    (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
-  # (1 - p2.group.conformity.higien) +
-  # (1 - p1.group.conformity.distance) +
-  # (1 - p2.group.conformity.distance)
-  r = rand()
-
+  #  (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
+   (1 - p2.group.conformity.higien)
+  +(1 - p1.group.conformity.distance)*(1 - p2.group.conformity.distance)
 
   if typeof(p1.group) == typeof(p2.group)
-    transmission_possiblity = 1.0
+    transmission_possiblity = 1 - p1.group.conformity.higien
   end
+  r = rand()
   if r < transmission_possiblity
     @debug "h transmission"
     p2 = Sick(incubation_period(), p2.group)
@@ -171,11 +171,11 @@ function update_sick!(persons::Vector{<:Person})
   end
 end
 
-function daily_change_horizontal!(persons::Vector{<:Person}, overlap)
+function daily_change_horizontal!(persons::Vector{<:Person})
   for i = 1:lastindex(persons)-1
     r = rand()
     #@debug overlap, r
-    if rand() < overlap
+    if rand() < persons[i].group.conformity.overlap
       persons[i], persons[i+1] = contact(persons[i], persons[i+1])
     end
   end
@@ -211,15 +211,9 @@ function daily_update(circle_param::Dict)
   update_sick!(responsible_groups)
   update_sick!(regular_groups)
   update_sick!(irresponsible_groups)
-  daily_change_horizontal!(responsible_groups, params["inner"]["overlap"])
-  daily_change_horizontal!(
-    regular_groups,
-    circle_param["intermidiate"]["overlap"],
-  )
-  daily_change_horizontal!(
-    irresponsible_groups,
-    circle_param["outer"]["overlap"],
-  )
+  daily_change_horizontal!(responsible_groups)
+  daily_change_horizontal!(regular_groups)
+  daily_change_horizontal!(irresponsible_groups)
   daily_change_inner!(
     responsible_groups,
     circle_param["inner"]["contact2m"],
@@ -230,11 +224,11 @@ end
 
 function setConformity(params::Dict, phase)
   d = params["inner"]["conformity"][phase]
-  inner_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"])
+  inner_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   d = params["intermidiate"]["conformity"][phase]
-  intermidiate_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"])
+  intermidiate_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   d = params["outer"]["conformity"][phase]
-  outer_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"])
+  outer_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   return inner_conformity, intermidiate_conformity, outer_conformity
 end
 
@@ -262,34 +256,31 @@ end
 
 p1 = Dict(
   "responsible_groups_number" => 3000,
-  "phase_length"=>(30, 30, 30),
-  "initial_rate" => (2, 2, 2),
+  "phase_length"=>(60, 30, 30),
+  "initial_rate" => (0.5, 0.1, 0.5),
   "inner" => Dict(
     "size" => 3,
-    "overlap" => 0.2,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 1.0, "distance" => 0.5),
-      Dict("ppe_usage" => 0.95, "higien" => 1.0, "distance" => 0.9),
-      Dict("ppe_usage" => 0.7, "higien" => 1.0, "distance" => 0.5)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.9, "distance" => 0.5, "overlap" => 0.7),
+      Dict("ppe_usage" => 0.95, "higien" => 1.0, "distance" => 0.9, "overlap" => 0.1),
+      Dict("ppe_usage" => 0.7, "higien" => 1.0, "distance" => 0.5, "overlap" => 0.3)],
     "contact2m" => 5,
     "contact2o" => 3,
   ),
   "intermidiate" => Dict(
-    "size" => 5,
-    "overlap" => 0.3,
+    "size" => 10,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.5, "distance" => 0.7),
-      Dict("ppe_usage" => 0.75, "higien" => 0.5, "distance" => 0.7),
-      Dict("ppe_usage" => 0.5, "higien" => 0.5, "distance" => 0.7)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.7, "overlap" => 0.5),
+      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.7, "overlap" => 0.1),
+      Dict("ppe_usage" => 0.3, "higien" => 0.4, "distance" => 0.7, "overlap" => 0.4)],
     "contact2o" => 5,
   ),
   "outer" => Dict(
-    "size" => 8,
-    "overlap" => 0.4,
+    "size" => 20,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0),
-      Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0),
-      Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0, "overlap" => 0.9),
+      Dict("ppe_usage" => 0.6, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.5),
+      Dict("ppe_usage" => 0.2, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.8)],
   ),
 )
 
@@ -309,8 +300,8 @@ let
   v = [0, 0, 0]
   daily_stat = zeros(Int64, 3, sum(params["phase_length"]))
   count_cases!(v)
-  @show "----"
-  @show paramss = @sprintf "this is a %s %15.1f" "test" 34.567;
+  @show "----------"
+  @show params
   #@show v, v[3] / sum(v), initial_rate
   #setConformity(1)
   for d = 1:params["phase_length"][1]
@@ -338,8 +329,8 @@ let
     daily_cases!(daily_stat, v, d + params["phase_length"][1] + params["phase_length"][2])
   end
   @show v, v[3] / sum(v), initial_rate
-  t = string(params["phase_length"][1])*string(params["phase_length"][2])*string(params["phase_length"][3])
+  s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
   plot([1:sum(params["phase_length"])],  [daily_stat[i, :] for i in 1:3],
-  title = t, label=["Healthy" "Sick" "Immune"], lw = 3)
+  title = s, label=["Healthy" "Sick" "Immune"], lw = 3)
 end
 current()
