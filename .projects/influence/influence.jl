@@ -143,6 +143,7 @@ function contact(p1::Sick, p2::Healthy)
   if typeof(p1.group) == typeof(p2.group)
     transmission_possiblity = 1 - p1.group.conformity.higien
   end
+  transmission_possiblity = transmission_possiblity * p1.days_to_immune / incubation_period()
   r = rand()
   if r < transmission_possiblity
     @debug "h transmission"
@@ -156,6 +157,21 @@ function contact(p1::Healthy, p2::Sick)
   return p1, p2
 end
 
+function going_out(p::Healthy)
+  transmission_possiblity =
+   (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
+  r = rand()
+  if r < transmission_possiblity/1000
+    @debug "h transmission"
+    p = Sick(incubation_period(), p.group)
+  end
+  return p
+end
+
+function going_out(p::Person)
+  return p
+end
+
 contact(p1::Person, p2::Person) = p1, p2
 
 function update_sick!(persons::Vector{<:Person})
@@ -167,6 +183,8 @@ function update_sick!(persons::Vector{<:Person})
   for (i, p) in enumerate(persons)
     if check_to_immune!(p)
       persons[i] = Immune(p.group)
+    else
+      persons[i] = going_out(p)
     end
   end
 end
@@ -257,7 +275,7 @@ end
 p1 = Dict(
   "responsible_groups_number" => 3000,
   "phase_length"=>(30, 30, 30),
-  "initial_rate" => (0.5, 0.1, 0.5),
+  "initial_rate" => (0.2, 0.1, 0.1),
   "inner" => Dict(
     "size" => 3,
     "conformity" =>
@@ -270,17 +288,17 @@ p1 = Dict(
   "intermidiate" => Dict(
     "size" => 8,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.7, "overlap" => 0.6),
-      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.5, "overlap" => 0.1),
+      [Dict("ppe_usage" => 0.0, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.6),
+      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.5, "overlap" => 0.05),
       Dict("ppe_usage" => 0.3, "higien" => 0.4, "distance" => 0.7, "overlap" => 0.2)],
     "contact2o" => 5,
   ),
   "outer" => Dict(
     "size" => 10,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0, "overlap" => 0.8),
-      Dict("ppe_usage" => 0.6, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.1),
-      Dict("ppe_usage" => 0.2, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.4)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.8),
+      Dict("ppe_usage" => 0.7, "higien" => 0.3, "distance" => 0.4, "overlap" => 0.1),
+      Dict("ppe_usage" => 0.2, "higien" => 0.2, "distance" => 0.0, "overlap" => 0.7)],
   ),
 )
 
