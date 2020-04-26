@@ -118,7 +118,7 @@ function build_groups(circle_param, responsible_groups_number)
 end
 
 function get_incubation_period(days)
-  return  ()->days[1] + rand(days[1]:days[2],1)[1]
+  return  ()->rand(days[1]:days[2],1)[1]
 end
 
 function initial_impact!(rate, persons::Vector{<:Person})
