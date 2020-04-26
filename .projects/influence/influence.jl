@@ -1,6 +1,6 @@
 #using .MySQLmodule
 using Plots
-using Printf
+#using Printf
 
 
 ENV["JULIA_DEBUG"]="info"
@@ -137,8 +137,8 @@ end
 function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
   #  (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
-   (1 - p2.group.conformity.higien)
-  +(1 - p1.group.conformity.distance)*(1 - p2.group.conformity.distance)
+   (1 - p2.group.conformity.higien)*(1 - p1.group.conformity.ppe_usage)
+  +(1 - p1.group.conformity.distance)*(1 - p2.group.conformity.distance) * (1 - p2.group.conformity.ppe_usage)
 
   if typeof(p1.group) == typeof(p2.group)
     transmission_possiblity = 1 - p1.group.conformity.higien
@@ -256,31 +256,31 @@ end
 
 p1 = Dict(
   "responsible_groups_number" => 3000,
-  "phase_length"=>(60, 30, 30),
+  "phase_length"=>(30, 30, 30),
   "initial_rate" => (0.5, 0.1, 0.5),
   "inner" => Dict(
     "size" => 3,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.9, "distance" => 0.5, "overlap" => 0.7),
-      Dict("ppe_usage" => 0.95, "higien" => 1.0, "distance" => 0.9, "overlap" => 0.1),
-      Dict("ppe_usage" => 0.7, "higien" => 1.0, "distance" => 0.5, "overlap" => 0.3)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.9, "distance" => 0.5, "overlap" => 0.5),
+      Dict("ppe_usage" => 0.95, "higien" => 1.0, "distance" => 0.9, "overlap" => 0.0),
+      Dict("ppe_usage" => 0.7, "higien" => 1.0, "distance" => 0.5, "overlap" => 0.1)],
     "contact2m" => 5,
     "contact2o" => 3,
   ),
   "intermidiate" => Dict(
-    "size" => 10,
+    "size" => 8,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.7, "overlap" => 0.5),
-      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.7, "overlap" => 0.1),
-      Dict("ppe_usage" => 0.3, "higien" => 0.4, "distance" => 0.7, "overlap" => 0.4)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.7, "overlap" => 0.6),
+      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.5, "overlap" => 0.1),
+      Dict("ppe_usage" => 0.3, "higien" => 0.4, "distance" => 0.7, "overlap" => 0.2)],
     "contact2o" => 5,
   ),
   "outer" => Dict(
-    "size" => 20,
+    "size" => 10,
     "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0, "overlap" => 0.9),
-      Dict("ppe_usage" => 0.6, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.5),
-      Dict("ppe_usage" => 0.2, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.8)],
+      [Dict("ppe_usage" => 0.0, "higien" => 0.0, "distance" => 0.0, "overlap" => 0.8),
+      Dict("ppe_usage" => 0.6, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.1),
+      Dict("ppe_usage" => 0.2, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.4)],
   ),
 )
 
@@ -329,8 +329,8 @@ let
     daily_cases!(daily_stat, v, d + params["phase_length"][1] + params["phase_length"][2])
   end
   @show v, v[3] / sum(v), initial_rate
-  s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
+  #s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
   plot([1:sum(params["phase_length"])],  [daily_stat[i, :] for i in 1:3],
-  title = s, label=["Healthy" "Sick" "Immune"], lw = 3)
+  label=["Healthy" "Sick" "Immune"], lw = 3)
 end
 current()
