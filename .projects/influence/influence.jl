@@ -8,10 +8,6 @@ ENV["JULIA_DEBUG"]="info"
 
 abstract type Group end
 
-function incubation_period()
-  return 15
-end
-
 struct Conformity
   ppe_usage
   higien
@@ -22,8 +18,6 @@ end
 function Conformity(d::Dict)
   return Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
 end
-
-
 
 mutable struct Responsible <: Group
   conformity::Conformity
@@ -123,6 +117,10 @@ function build_groups(circle_param, responsible_groups_number)
   return responsible_groups, regular_groups, irresponsible_groups
 end
 
+function get_incubation_period(days)
+  return  ()->days[1] + rand(days[1]:days[2],1)[1]
+end
+
 function initial_impact!(rate, persons::Vector{<:Person})
   l = size(persons)[1]
   r = l / 100 * rate
@@ -161,7 +159,7 @@ function going_out(p::Healthy)
   transmission_possiblity =
    (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
   r = rand()
-  if r < transmission_possiblity/1000
+  if r < transmission_possiblity/10000
     @debug "h transmission"
     p = Sick(incubation_period(), p.group)
   end
@@ -276,6 +274,7 @@ p1 = Dict(
   "responsible_groups_number" => 3000,
   "phase_length"=>(30, 30, 30),
   "initial_rate" => (0.2, 0.1, 0.1),
+  "incubation_period" => (14, 18),
   "inner" => Dict(
     "size" => 3,
     "conformity" =>
@@ -309,6 +308,8 @@ responsible_groups_number = params["responsible_groups_number"]
 responsible_groups, regular_groups, irresponsible_groups =
   build_groups(params, responsible_groups_number)
 
+incubation_period = get_incubation_period(params["incubation_period"])
+
 initial_rate = params["initial_rate"]
 initial_impact!(initial_rate[1], responsible_groups)
 initial_impact!(initial_rate[2], regular_groups)
@@ -319,7 +320,7 @@ let
   daily_stat = zeros(Int64, 3, sum(params["phase_length"]))
   count_cases!(v)
   @show "----------"
-  @show params
+  #@show params
   #@show v, v[3] / sum(v), initial_rate
   #setConformity(1)
   for d = 1:params["phase_length"][1]
@@ -328,7 +329,7 @@ let
     count_cases!(v)
     daily_cases!(daily_stat, v, d)
   end
-  @show v, v[3] / sum(v), initial_rate
+  @show v
 
   inner_conformity, intermidiate_conformity, outer_conformity = setConformity(params, 2)
   for d = 1:params["phase_length"][2]
@@ -337,7 +338,7 @@ let
     count_cases!(v)
     daily_cases!(daily_stat, v, d + params["phase_length"][1])
   end
-  @show v, v[3] / sum(v), initial_rate
+  @show v
 
   inner_conformity, intermidiate_conformity, outer_conformity = setConformity(params, 3)
   for d = 1:params["phase_length"][3]
@@ -346,7 +347,7 @@ let
     count_cases!(v)
     daily_cases!(daily_stat, v, d + params["phase_length"][1] + params["phase_length"][2])
   end
-  @show v, v[3] / sum(v), initial_rate
+  @show v
   #s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
   plot([1:sum(params["phase_length"])],  [daily_stat[i, :] for i in 1:3],
   label=["Healthy" "Sick" "Immune"], lw = 3)
