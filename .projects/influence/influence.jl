@@ -3,7 +3,7 @@ using Plots
 #using Printf
 
 
-ENV["JULIA_DEBUG"]="info"
+ENV["JULIA_DEBUG"] = "info"
 #ENV["JULIA_DEBUG"]="all"
 
 abstract type Group end
@@ -118,7 +118,7 @@ function build_groups(circle_param, responsible_groups_number)
 end
 
 function get_incubation_period(days)
-  return  ()->rand(days[1]:days[2],1)[1]
+  return () -> rand(days[1]:days[2], 1)[1]
 end
 
 function initial_impact!(rate, persons::Vector{<:Person})
@@ -135,13 +135,16 @@ end
 function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
   #  (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
-   (1 - p2.group.conformity.higien)*(1 - p1.group.conformity.ppe_usage)
-  +(1 - p1.group.conformity.distance)*(1 - p2.group.conformity.distance) * (1 - p2.group.conformity.ppe_usage)
+    (1 - p2.group.conformity.higien) * (1 - p1.group.conformity.ppe_usage)
+  +(1 - p1.group.conformity.distance) *
+  (1 - p2.group.conformity.distance) *
+  (1 - p2.group.conformity.ppe_usage)
 
   if typeof(p1.group) == typeof(p2.group)
     transmission_possiblity = 1 - p1.group.conformity.higien
   end
-  transmission_possiblity = transmission_possiblity * p1.days_to_immune / incubation_period()
+  transmission_possiblity =
+    transmission_possiblity * p1.days_to_immune / incubation_period()
   r = rand()
   if r < transmission_possiblity
     @debug "h transmission"
@@ -155,24 +158,24 @@ function contact(p1::Healthy, p2::Sick)
   return p1, p2
 end
 
-function going_out(p::Healthy)
+function going_out(p::Healthy, n, phase)
   transmission_possiblity =
-   (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
+    (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
   r = rand()
-  if r < transmission_possiblity/10000
-    @debug "h transmission"
+  #@show n
+  if r < transmission_possiblity / 10000 # * (n+0.1)
     p = Sick(incubation_period(), p.group)
   end
   return p
 end
 
-function going_out(p::Person)
+function going_out(p::Person, n, phase)
   return p
 end
 
 contact(p1::Person, p2::Person) = p1, p2
 
-function update_sick!(persons::Vector{<:Person})
+function update_sick!(persons::Vector{<:Person}, v)
   check_to_immune!(p::Person) = false
   function check_to_immune!(p::Sick)
     p.days_to_immune -= 1
@@ -182,7 +185,7 @@ function update_sick!(persons::Vector{<:Person})
     if check_to_immune!(p)
       persons[i] = Immune(p.group)
     else
-      persons[i] = going_out(p)
+      persons[i] = going_out(p, v[2]/(sum(v) + 1), 1)
     end
   end
 end
@@ -202,31 +205,34 @@ function daily_change_inner!(
   contacts_to_im,
   contact_to_out,
 )
-  for i  in eachindex(persons)
+  for i in eachindex(persons)
     im_c = rand(persons[i].group.intermidiate_circle, contacts_to_im)
     for im_person in im_c
-      persons[i], regular_groups[im_person] = contact(persons[i], regular_groups[im_person])
+      persons[i], regular_groups[im_person] =
+        contact(persons[i], regular_groups[im_person])
     end
     out_c = rand(persons[i].group.outer_circle, contact_to_out)
     for out_person in out_c
-      persons[i], irresponsible_groups[out_person] = contact(persons[i], irresponsible_groups[out_person])
+      persons[i], irresponsible_groups[out_person] =
+        contact(persons[i], irresponsible_groups[out_person])
     end
   end
 end
 
 function daily_change_intermidiate!(persons::Vector{<:Person}, contact_to_out)
-  for i  in eachindex(persons)
+  for i in eachindex(persons)
     out_c = rand(persons[i].group.outer_circle, contact_to_out)
     for out_person in out_c
-      persons[i], irresponsible_groups[out_person] = contact(persons[i], irresponsible_groups[out_person])
+      persons[i], irresponsible_groups[out_person] =
+        contact(persons[i], irresponsible_groups[out_person])
     end
   end
 end
 
-function daily_update(circle_param::Dict)
-  update_sick!(responsible_groups)
-  update_sick!(regular_groups)
-  update_sick!(irresponsible_groups)
+function daily_update(circle_param::Dict, v)
+  update_sick!(responsible_groups, v)
+  update_sick!(regular_groups, v)
+  update_sick!(irresponsible_groups, v)
   daily_change_horizontal!(responsible_groups)
   daily_change_horizontal!(regular_groups)
   daily_change_horizontal!(irresponsible_groups)
@@ -235,16 +241,22 @@ function daily_update(circle_param::Dict)
     circle_param["inner"]["contact2m"],
     circle_param["inner"]["contact2o"],
   )
-  daily_change_intermidiate!(regular_groups, circle_param["intermidiate"]["contact2o"])
+  daily_change_intermidiate!(
+    regular_groups,
+    circle_param["intermidiate"]["contact2o"],
+  )
 end
 
 function setConformity(params::Dict, phase)
   d = params["inner"]["conformity"][phase]
-  inner_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
+  inner_conformity =
+    Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   d = params["intermidiate"]["conformity"][phase]
-  intermidiate_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
+  intermidiate_conformity =
+    Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   d = params["outer"]["conformity"][phase]
-  outer_conformity = Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
+  outer_conformity =
+    Conformity(d["ppe_usage"], d["higien"], d["distance"], d["overlap"])
   return inner_conformity, intermidiate_conformity, outer_conformity
 end
 
@@ -272,38 +284,87 @@ end
 
 p1 = Dict(
   "responsible_groups_number" => 3000,
-  "phase_length"=>(30, 30, 30),
+  "phase_length" => (30, 40, 30),
   "initial_rate" => (0.2, 0.1, 0.1),
-  "incubation_period" => (14, 18),
+  "incubation_period" => (14, 24),
   "inner" => Dict(
     "size" => 3,
-    "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.9, "distance" => 0.5, "overlap" => 0.5),
-      Dict("ppe_usage" => 0.95, "higien" => 1.0, "distance" => 0.9, "overlap" => 0.0),
-      Dict("ppe_usage" => 0.7, "higien" => 1.0, "distance" => 0.5, "overlap" => 0.1)],
+    "conformity" => [
+      Dict(
+        "ppe_usage" => 0.0,
+        "higien" => 0.9,
+        "distance" => 0.5,
+        "overlap" => 0.5,
+      ),
+      Dict(
+        "ppe_usage" => 0.95,
+        "higien" => 1.0,
+        "distance" => 0.9,
+        "overlap" => 0.0,
+      ),
+      Dict(
+        "ppe_usage" => 0.7,
+        "higien" => 1.0,
+        "distance" => 0.5,
+        "overlap" => 0.1,
+      ),
+    ],
     "contact2m" => 5,
     "contact2o" => 3,
   ),
   "intermidiate" => Dict(
     "size" => 8,
-    "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.2, "distance" => 0.2, "overlap" => 0.6),
-      Dict("ppe_usage" => 0.8, "higien" => 0.7, "distance" => 0.5, "overlap" => 0.05),
-      Dict("ppe_usage" => 0.3, "higien" => 0.4, "distance" => 0.7, "overlap" => 0.2)],
+    "conformity" => [
+      Dict(
+        "ppe_usage" => 0.0,
+        "higien" => 0.2,
+        "distance" => 0.2,
+        "overlap" => 0.6,
+      ),
+      Dict(
+        "ppe_usage" => 0.8,
+        "higien" => 0.5,
+        "distance" => 0.5,
+        "overlap" => 0.05,
+      ),
+      Dict(
+        "ppe_usage" => 0.3,
+        "higien" => 0.4,
+        "distance" => 0.7,
+        "overlap" => 0.2,
+      ),
+    ],
     "contact2o" => 5,
   ),
   "outer" => Dict(
     "size" => 10,
-    "conformity" =>
-      [Dict("ppe_usage" => 0.0, "higien" => 0.1, "distance" => 0.0, "overlap" => 0.8),
-      Dict("ppe_usage" => 0.7, "higien" => 0.3, "distance" => 0.4, "overlap" => 0.1),
-      Dict("ppe_usage" => 0.2, "higien" => 0.2, "distance" => 0.0, "overlap" => 0.7)],
+    "conformity" => [
+      Dict(
+        "ppe_usage" => 0.0,
+        "higien" => 0.1,
+        "distance" => 0.0,
+        "overlap" => 0.8,
+      ),
+      Dict(
+        "ppe_usage" => 0.7,
+        "higien" => 0.3,
+        "distance" => 0.4,
+        "overlap" => 0.1,
+      ),
+      Dict(
+        "ppe_usage" => 0.2,
+        "higien" => 0.2,
+        "distance" => 0.0,
+        "overlap" => 0.7,
+      ),
+    ],
   ),
 )
 
 params = p1
 #params = MySQLmodule.read_param(23)
-inner_conformity, intermidiate_conformity, outer_conformity = setConformity(params, 1)
+inner_conformity, intermidiate_conformity, outer_conformity =
+  setConformity(params, 1)
 responsible_groups_number = params["responsible_groups_number"]
 responsible_groups, regular_groups, irresponsible_groups =
   build_groups(params, responsible_groups_number)
@@ -317,39 +378,54 @@ initial_impact!(initial_rate[3], irresponsible_groups)
 
 let
   v = [0, 0, 0]
+  w = [0, 0, 0]
   daily_stat = zeros(Int64, 3, sum(params["phase_length"]))
   count_cases!(v)
   @show "----------"
+  @show v
   #@show params
   #@show v, v[3] / sum(v), initial_rate
   #setConformity(1)
+  w += v
   for d = 1:params["phase_length"][1]
     v = [0, 0, 0]
-    daily_update(params)
+    daily_update(params, v)
     count_cases!(v)
-    daily_cases!(daily_stat, v, d)
+    daily_cases!(daily_stat, w, d)
   end
   @show v
 
-  inner_conformity, intermidiate_conformity, outer_conformity = setConformity(params, 2)
+  inner_conformity, intermidiate_conformity, outer_conformity =
+    setConformity(params, 2)
+  w += v
   for d = 1:params["phase_length"][2]
     v = [0, 0, 0]
-    daily_update(params)
+    daily_update(params, w)
     count_cases!(v)
     daily_cases!(daily_stat, v, d + params["phase_length"][1])
   end
   @show v
 
-  inner_conformity, intermidiate_conformity, outer_conformity = setConformity(params, 3)
+  inner_conformity, intermidiate_conformity, outer_conformity =
+    setConformity(params, 3)
+  w += v
   for d = 1:params["phase_length"][3]
     v = [0, 0, 0]
-    daily_update(params)
+    daily_update(params, w)
     count_cases!(v)
-    daily_cases!(daily_stat, v, d + params["phase_length"][1] + params["phase_length"][2])
+    daily_cases!(
+      daily_stat,
+      v,
+      d + params["phase_length"][1] + params["phase_length"][2],
+    )
   end
   @show v
   #s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
-  plot([1:sum(params["phase_length"])],  [daily_stat[i, :] for i in 1:3],
-  label=["Healthy" "Sick" "Immune"], lw = 3)
+  plot(
+    [1:sum(params["phase_length"])],
+    [daily_stat[i, :] for i = 1:3],
+    label = ["Healthy" "Sick" "Immune"],
+    lw = 3,
+  )
 end
 current()
