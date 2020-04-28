@@ -144,7 +144,7 @@ function contact(p1::Sick, p2::Healthy)
     transmission_possiblity = 1 - p1.group.conformity.higien
   end
   transmission_possiblity =
-    transmission_possiblity * p1.days_to_immune / incubation_period()
+    transmission_possiblity * p1.days_to_immune / incubation_period() * 2
   r = rand()
   if r < transmission_possiblity
     @debug "h transmission"
@@ -158,12 +158,13 @@ function contact(p1::Healthy, p2::Sick)
   return p1, p2
 end
 
-function going_out(p::Healthy, n, phase)
+function going_out(p::Healthy, n, env_higien)
   transmission_possiblity =
     (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
   r = rand()
   #@show n
-  if r < transmission_possiblity / 10000 # * (n+0.1)
+  if r < transmission_possiblity / 10000 * (1 - env_higien) * max(0.4, n)
+    #if r < transmission_possiblity/1000 *(1 - env_higien) * n
     p = Sick(incubation_period(), p.group)
   end
   return p
@@ -175,17 +176,19 @@ end
 
 contact(p1::Person, p2::Person) = p1, p2
 
-function update_sick!(persons::Vector{<:Person}, v)
+function update_sick!(persons::Vector{<:Person}, v, phase)
   check_to_immune!(p::Person) = false
   function check_to_immune!(p::Sick)
     p.days_to_immune -= 1
     return p.days_to_immune == 0
   end
+  phase_higien = params["env_higien"][phase]
   for (i, p) in enumerate(persons)
     if check_to_immune!(p)
       persons[i] = Immune(p.group)
     else
-      persons[i] = going_out(p, v[2]/(sum(v) + 1), 1)
+
+      persons[i] = going_out(p, v[2] / (sum(v) + 1), phase_higien)
     end
   end
 end
@@ -229,10 +232,10 @@ function daily_change_intermidiate!(persons::Vector{<:Person}, contact_to_out)
   end
 end
 
-function daily_update(circle_param::Dict, v)
-  update_sick!(responsible_groups, v)
-  update_sick!(regular_groups, v)
-  update_sick!(irresponsible_groups, v)
+function daily_update(circle_param::Dict, v, phase)
+  update_sick!(responsible_groups, v, phase)
+  update_sick!(regular_groups, v, phase)
+  update_sick!(irresponsible_groups, v, phase)
   daily_change_horizontal!(responsible_groups)
   daily_change_horizontal!(regular_groups)
   daily_change_horizontal!(irresponsible_groups)
@@ -264,7 +267,8 @@ counter!(p::Healthy, v) = v[1] += 1
 counter!(p::Sick, v) = v[2] += 1
 counter!(p::Immune, v) = v[3] += 1
 
-function count_cases!(v)
+function count_cases()
+  v = [0, 0, 0]
   for p in responsible_groups
     counter!(p, v)
   end
@@ -274,18 +278,20 @@ function count_cases!(v)
   for p in irresponsible_groups
     counter!(p, v)
   end
+  return v
 end
 
-function daily_cases!(daily_stat, v, i)
-  daily_stat[1, i] = v[1]
-  daily_stat[2, i] = v[2]
-  daily_stat[3, i] = v[3]
+function daily_cases!(daily_stat, v, phase, i)
+  daily_stat[phase][1, i] = v[1]
+  daily_stat[phase][2, i] = v[2]
+  daily_stat[phase][3, i] = v[3]
 end
 
 p1 = Dict(
   "responsible_groups_number" => 3000,
   "phase_length" => (30, 40, 30),
   "initial_rate" => (0.2, 0.1, 0.1),
+  "env_higien" => (0.3, 0.8, 0.7),
   "incubation_period" => (14, 24),
   "inner" => Dict(
     "size" => 3,
@@ -375,57 +381,33 @@ initial_rate = params["initial_rate"]
 initial_impact!(initial_rate[1], responsible_groups)
 initial_impact!(initial_rate[2], regular_groups)
 initial_impact!(initial_rate[3], irresponsible_groups)
-
+daily_stat = [
+  zeros(Int64, 3, params["phase_length"][1]),
+  zeros(Int64, 3, params["phase_length"][2]),
+  zeros(Int64, 3, params["phase_length"][3]),
+]
 let
-  v = [0, 0, 0]
-  w = [0, 0, 0]
-  daily_stat = zeros(Int64, 3, sum(params["phase_length"]))
-  count_cases!(v)
-  @show "----------"
+  v = count_cases()
+  @show "------------------"
   @show v
-  #@show params
-  #@show v, v[3] / sum(v), initial_rate
-  #setConformity(1)
-  w += v
-  for d = 1:params["phase_length"][1]
-    v = [0, 0, 0]
-    daily_update(params, v)
-    count_cases!(v)
-    daily_cases!(daily_stat, w, d)
+  for phase = 1:3
+    inner_conformity, intermidiate_conformity, outer_conformity =
+      setConformity(params, phase)
+    for d = 1:params["phase_length"][phase]
+      daily_update(params, v, phase)
+      v = count_cases()
+      daily_cases!(daily_stat, v, phase, d)
+    end
+    @show v
   end
-  @show v
-
-  inner_conformity, intermidiate_conformity, outer_conformity =
-    setConformity(params, 2)
-  w += v
-  for d = 1:params["phase_length"][2]
-    v = [0, 0, 0]
-    daily_update(params, w)
-    count_cases!(v)
-    daily_cases!(daily_stat, v, d + params["phase_length"][1])
-  end
-  @show v
-
-  inner_conformity, intermidiate_conformity, outer_conformity =
-    setConformity(params, 3)
-  w += v
-  for d = 1:params["phase_length"][3]
-    v = [0, 0, 0]
-    daily_update(params, w)
-    count_cases!(v)
-    daily_cases!(
-      daily_stat,
-      v,
-      d + params["phase_length"][1] + params["phase_length"][2],
-    )
-  end
-  @show v
-  #s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
-  plot(
-    [1:sum(params["phase_length"])],
-    [daily_stat[i, :] for i = 1:3],
-    label = ["Healthy" "Sick" "Immune"],
-    lw = 3,
-  )
 end
-current()
+#s = @sprintf("phases:%.0f-%.0f-%.0f", params["phase_length"][1], params["phase_length"][2], params["phase_length"][3])
+plot(
+  [1:sum(params["phase_length"])],
+  [
+    cat(dims = 2, daily_stat[1], daily_stat[2], daily_stat[3])[i, :]
+    for i = 1:3
+  ],
+  label = ["Healthy" "Sick" "Immune"],
+  lw = 3,
+)
