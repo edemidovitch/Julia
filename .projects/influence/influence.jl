@@ -134,19 +134,18 @@ end
 
 function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
-  #  (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
-    (1 - p2.group.conformity.higien) * (1 - p1.group.conformity.ppe_usage)
-  +(1 - p1.group.conformity.distance) *
-  (1 - p2.group.conformity.distance) *
-  (1 - p2.group.conformity.ppe_usage)
+    (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
+    (1 - p2.group.conformity.higien) * (1 - p1.group.conformity.higien)
+  *(1 - p1.group.conformity.distance) *
+  (1 - p2.group.conformity.distance)
 
   if typeof(p1.group) == typeof(p2.group)
     transmission_possiblity = 1 - p1.group.conformity.higien
   end
   transmission_possiblity =
-    transmission_possiblity * p1.days_to_immune / incubation_period() * 2
+    transmission_possiblity * p1.days_to_immune / incubation_period()
   r = rand()
-  if r < transmission_possiblity
+  if r < transmission_possiblity/7.0
     @debug "h transmission"
     p2 = Sick(incubation_period(), p2.group)
   end
@@ -154,16 +153,19 @@ function contact(p1::Sick, p2::Healthy)
 end
 
 function contact(p1::Healthy, p2::Sick)
-  contact(p2::Sick, p1::Healthy)
+  p2, p1 = contact(p2::Sick, p1::Healthy)
   return p1, p2
 end
 
+contact(p1::Person, p2::Person) = p1, p2
+
 function going_out(p::Healthy, n, env_higien)
   transmission_possiblity =
-    (1 - p.group.conformity.higien) + (1 - p.group.conformity.ppe_usage)
+    (1 - p.group.conformity.higien) * (1 - p.group.conformity.ppe_usage) * (1 - p.group.conformity.distance)
+
   r = rand()
   #@show n
-  if r < transmission_possiblity / 10000 * (1 - env_higien) * max(0.4, n)
+  if r < transmission_possiblity / 100000 * (1 - env_higien) * max(0.4, n)
     #if r < transmission_possiblity/1000 *(1 - env_higien) * n
     p = Sick(incubation_period(), p.group)
   end
@@ -173,8 +175,6 @@ end
 function going_out(p::Person, n, phase)
   return p
 end
-
-contact(p1::Person, p2::Person) = p1, p2
 
 function update_sick!(persons::Vector{<:Person}, v, phase)
   check_to_immune!(p::Person) = false
@@ -289,7 +289,7 @@ end
 
 p1 = Dict(
   "responsible_groups_number" => 3000,
-  "phase_length" => (30, 40, 30),
+  "phase_length" => (30, 40, 40),
   "initial_rate" => (0.2, 0.1, 0.1),
   "env_higien" => (0.3, 0.8, 0.7),
   "incubation_period" => (14, 24),
@@ -387,8 +387,8 @@ daily_stat = [
   zeros(Int64, 3, params["phase_length"][3]),
 ]
 let
-  v = count_cases()
   @show "------------------"
+  v = count_cases()
   @show v
   for phase = 1:3
     inner_conformity, intermidiate_conformity, outer_conformity =
