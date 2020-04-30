@@ -135,9 +135,8 @@ end
 function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
     (1 - p1.group.conformity.ppe_usage) * (1 - p2.group.conformity.ppe_usage)
-    (1 - p2.group.conformity.higien) * (1 - p1.group.conformity.higien)
-  *(1 - p1.group.conformity.distance) *
-  (1 - p2.group.conformity.distance)
+  (1 - p2.group.conformity.higien) * (1 - p1.group.conformity.higien)
+  *(1 - p1.group.conformity.distance) * (1 - p2.group.conformity.distance)
 
   if typeof(p1.group) == typeof(p2.group)
     transmission_possiblity = 1 - p1.group.conformity.higien
@@ -145,7 +144,7 @@ function contact(p1::Sick, p2::Healthy)
   transmission_possiblity =
     transmission_possiblity * p1.days_to_immune / incubation_period()
   r = rand()
-  if r < transmission_possiblity/7.0
+  if r < transmission_possiblity / 7.0
     @debug "h transmission"
     p2 = Sick(incubation_period(), p2.group)
   end
@@ -161,7 +160,9 @@ contact(p1::Person, p2::Person) = p1, p2
 
 function going_out(p::Healthy, n, env_higien)
   transmission_possiblity =
-    (1 - p.group.conformity.higien) * (1 - p.group.conformity.ppe_usage) * (1 - p.group.conformity.distance)
+    (1 - p.group.conformity.higien) *
+    (1 - p.group.conformity.ppe_usage) *
+    (1 - p.group.conformity.distance)
 
   r = rand()
   #@show n
