@@ -1,0 +1,41 @@
+module Acccounts2
+struct Date
+    d :: String
+end
+
+now() = "NOW"
+new_acct_number() =   "new number"
+
+
+mutable struct Person
+     name:: String
+     SSN :: String
+end
+
+mutable struct BankAccount
+    number :: String
+    owner :: Person
+    open_date :: Date
+    closed_date :: Date
+    last_acsess :: Date
+    amount :: Float64
+
+end
+
+
+mutable struct CheckingAccount
+    bank_acount::BankAccount
+    function CheckingAccount(owner::Person)
+        t = BankAccount(new_acct_number(), owner,  Date(now()), Date("None"), Date(now()), 0.0)
+        new(t)
+    end
+end
+
+mutable struct SavingAcccount
+    bank_acount::BankAccount
+end
+
+ca = CheckingAccount(Person("Me", "12344"))
+@show CheckingAccount
+println("------")
+end
